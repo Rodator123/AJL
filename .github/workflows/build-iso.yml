@@ -1,0 +1,48 @@
+name: Construire l'ISO AJL
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+      options: --privileged
+    permissions:
+      contents: write
+
+    steps:
+      - name: Installer archiso et git
+        run: |
+          pacman -Syu --noconfirm --needed archiso git
+
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Générer le profil AJL
+        run: bash creer-profil-ajl.sh
+
+      - name: Construire l'ISO
+        run: |
+          mkarchiso -v -w /tmp/ajl-work -o out ajl
+          ls -lh out
+
+      - name: Publier l'ISO dans les Releases (sur tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.iso
+
+      - name: Garder l'ISO comme artefact (builds manuels ou sur main)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: ajl-iso
+          path: out/*.iso
+          compression-level: 0
+          retention-days: 7
